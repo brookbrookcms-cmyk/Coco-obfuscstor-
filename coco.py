@@ -6,12 +6,11 @@ import getpass
 import hashlib
 import hmac
 import json
-import os
 from pathlib import Path
 import secrets
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 def connect(path):
@@ -32,6 +31,9 @@ def key_hash(code, salt):
 
 
 def make_loader(base_url, script_id):
+    base = urlparse(base_url)
+    if base.scheme not in ("http", "https") or not base.netloc:
+        raise ValueError("Server URL must be HTTP(S)")
     endpoint = base_url.rstrip("/") + "/script/" + script_id
     return f'''-- Coco loader prototype. Enter your code in Delta before running this file:
 -- getgenv().COCO_CODE = "your-code"
@@ -45,25 +47,32 @@ fn()
 '''
 
 
-def add(args):
-    source = Path(args.file).read_text(encoding="utf-8")
+def store_script(db_path, source, source_url, code):
     if not source.strip():
-        raise SystemExit("Script file is empty")
-    parsed = urlparse(args.source_url)
+        raise ValueError("Script is empty")
+    parsed = urlparse(source_url)
     if parsed.scheme != "https" or not parsed.netloc:
-        raise SystemExit("--source-url must be an HTTPS URL")
-    base = urlparse(args.base_url)
-    if base.scheme not in ("http", "https") or not base.netloc:
-        raise SystemExit("--base-url must be an HTTP(S) URL")
-    code = getpass.getpass("Access code: ")
+        raise ValueError("Original link must be an HTTPS URL")
     if len(code) < 8:
-        raise SystemExit("Use an access code of at least 8 characters")
+        raise ValueError("Use an access code of at least 8 characters")
     salt = secrets.token_bytes(16)
     script_id = secrets.token_urlsafe(12)
-    with connect(args.db) as db:
+    with connect(db_path) as db:
         db.execute("INSERT INTO scripts VALUES (?, ?, ?, ?, ?)",
-                   (script_id, source, args.source_url, salt, key_hash(code, salt)))
-    Path(args.output).write_text(make_loader(args.base_url, script_id), encoding="utf-8")
+                   (script_id, source, source_url, salt, key_hash(code, salt)))
+    return script_id
+
+
+def add(args):
+    source = Path(args.file).read_text(encoding="utf-8")
+    code = getpass.getpass("Access code: ")
+    try:
+        make_loader(args.base_url, "example")  # Validate before storing anything.
+        script_id = store_script(args.db, source, args.source_url, code)
+        loader = make_loader(args.base_url, script_id)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    Path(args.output).write_text(loader, encoding="utf-8")
     print(f"Wrote loader: {args.output}")
     print(f"Script ID: {script_id}")
     print(f"Reveal URL: {args.base_url.rstrip('/')}/reveal/{script_id}")

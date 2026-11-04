@@ -57,6 +57,26 @@ In Discord, type `/obf`. The form asks for your Luau script (up to 4,000 charact
 
 To test locally, run `.venv/bin/python -m unittest -v test_coco.py`.
 
+## Deploy on Railway
+
+This repository has `app.py`, which starts the bot and HTTP server in **one Railway service**. They share one SQLite database. Set Railway's **Start Command** to `python app.py`.
+
+1. In Railway, create a new project and choose **Deploy from GitHub repo**. Select `brookbrookcms-cmyk/Coco-obfuscstor-`.
+2. In the service's **Settings**, set the start command to `python app.py`. Add a **Volume** mounted at `/data` so scripts survive redeploys.
+3. Under **Networking**, generate a public Railway domain. Copy its HTTPS URL, with no trailing slash.
+4. Under **Variables**, add:
+
+| Variable | Value |
+| --- | --- |
+| `DISCORD_TOKEN` | Your Discord bot token from the Developer Portal |
+| `COCO_BASE_URL` | Your public Railway URL, for example `https://coco-production.up.railway.app` |
+| `COCO_DB` | `/data/coco.sqlite3` |
+| `DISCORD_GUILD_ID` | Your Discord server ID (recommended for quick slash command registration) |
+
+Railway supplies `PORT`; `app.py` listens on it. In **Settings**, set the healthcheck path to `/health`, then redeploy. The service must stay running for the loader and `/obf` to work.
+
+In the Discord Developer Portal, enable the bot and use **OAuth2 → URL Generator** with the `bot` and `applications.commands` scopes to invite it to your server. You do not need Message Content Intent for `/obf`. After Railway shows a healthy deployment, type `/obf` in that server. Enter your script, access code, and original HTTPS link, then submit. The bot sends `loader.lua` privately. Set `getgenv().COCO_CODE` in Delta before running the loader, as shown below.
+
 ## Use with Delta
 
 Deploy the server behind HTTPS, keep `coco.sqlite3` on private persistent storage, and use your HTTPS domain for `--base-url` when generating the loader. In Delta, set the code and run the generated `loader.lua`:

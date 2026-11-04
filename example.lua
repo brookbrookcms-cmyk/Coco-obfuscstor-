@@ -1,0 +1,1 @@
+print("Coco prototype loaded")

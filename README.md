@@ -1,10 +1,10 @@
-# Coco code-gated loader prototype
+# Coco code-gated loader and Discord bot prototype
 
 This prototype stores a Luau script and its original link in a private SQLite database. It generates a small Delta-compatible loader. The loader needs an access code to fetch and run the script. The same code reveals the original link. This is access control, **not Luraph-style obfuscation**: someone who can run the script can capture the fetched source or its network request.
 
 ## Requirements
 
-- Python 3.9 or newer; no packages to install.
+- Python 3.9 or newer. The Discord bot uses `discord.py` from `requirements.txt`.
 - An HTTPS deployment reachable from Delta for real use. `localhost` works only for local API testing.
 - A local copy of the Luau script and its original HTTPS URL.
 
@@ -34,6 +34,28 @@ curl 'http://127.0.0.1:8000/script/ID?code=YOUR_CODE'
 ```
 
 The first request returns the original URL; the second returns the stored Luau script. A wrong code returns HTTP 403.
+
+## Discord `/obf` command
+
+1. Create a Discord application and bot in the Discord Developer Portal. Invite the bot to your server with the `bot` and `applications.commands` scopes. Keep its token private.
+2. Deploy the Python server above at a public HTTPS address with persistent storage for `coco.sqlite3`. Start it with `python3 coco.py serve --host 0.0.0.0 --port 8000` behind your HTTPS proxy.
+3. Install and start the bot in a second process:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+export DISCORD_TOKEN='your-discord-bot-token'
+export COCO_BASE_URL='https://your-server.example'
+export COCO_DB='coco.sqlite3'
+export DISCORD_GUILD_ID='your-server-id'
+.venv/bin/python bot.py
+```
+
+`DISCORD_GUILD_ID` is optional, but setting it makes `/obf` appear quickly in that server. Without it, Discord may take time to show a global command. The bot and server must use the **same persistent SQLite file**; if they run on separate machines, use shared storage or put them on the same host.
+
+In Discord, type `/obf`. The form asks for your Luau script (up to 4,000 characters), the access code that the loader will require, and the script's original HTTPS link. Submit it. The bot privately replies with `loader.lua`. It does not include your access code in the loader.
+
+To test locally, run `.venv/bin/python -m unittest -v test_coco.py`.
 
 ## Use with Delta
 

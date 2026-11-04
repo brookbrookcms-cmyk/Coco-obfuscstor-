@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 from urllib.request import urlopen
 from unittest.mock import AsyncMock
 
+import app
 import bot
 import coco
 
@@ -67,6 +68,18 @@ class CocoTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 coco.store_script(db_path, "print(1)", "http://example.com/a.lua", "longcode123")
             self.assertFalse(Path(db_path).exists())
+
+    def test_railway_entrypoint_starts_http_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "data" / "coco.sqlite3")
+            server = app.start_http(db_path, 0)
+            try:
+                with urlopen(f"http://127.0.0.1:{server.server_port}/health") as response:
+                    self.assertEqual(response.read(), b"ok")
+                self.assertTrue(Path(db_path).exists())
+            finally:
+                server.shutdown()
+                server.server_close()
 
 
 if __name__ == "__main__":
